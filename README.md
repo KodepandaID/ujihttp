@@ -1,5 +1,5 @@
 # ujiHTTP
-HTTP handler testing for golang web framework.
+HTTP handler testing for golang web framework. The benchmark features used [fasthttp](https://github.com/valyala/fasthttp).
 
 ## Support Framework
 Will support another framework for the future
