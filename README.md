@@ -5,8 +5,8 @@ HTTP handler testing for golang web framework. The benchmark features used [fast
 Will support another framework for the future
 * [x] [Http Handler](https://golang.org/pkg/net/http/)
 * [x] [Gin](https://github.com/gin-gonic/gin)
-* [] [Echo](https://github.com/labstack/echo)
-* [] [Mux](https://github.com/gorilla/mux)
+* [ ] [Echo](https://github.com/labstack/echo)
+* [ ] [Mux](https://github.com/gorilla/mux)
 
 ## Installation
 ```bash
