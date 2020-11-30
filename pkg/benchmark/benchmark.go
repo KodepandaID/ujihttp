@@ -13,17 +13,20 @@ import (
 
 	"github.com/KodepandaID/ujihttp"
 	"github.com/KodepandaID/ujihttp/internal/fasthttp"
+	"github.com/KodepandaID/ujihttp/pkg/histogram"
 )
 
 var body = &bytes.Buffer{}
 var writer *multipart.Writer
 
 var (
-	timeout  int
-	reqError int
-	success  int
-	count    int
-	size     int
+	timeout   int64
+	reqError  int64
+	size      int64
+	start     time.Time
+	totalReq  int64
+	respOK    int64
+	respNotOK int64
 )
 
 // ReqBench is a request benchmark config
@@ -41,12 +44,6 @@ type ReqBench struct {
 	duration     int
 	pipeline     int
 	timeout      int
-}
-
-// Response contains an http.Response and an error if occured while making the request.
-type Response struct {
-	httpResponse *fasthttp.Response
-	err          error
 }
 
 // New to start a benchmark test
@@ -244,8 +241,20 @@ func (rb *ReqBench) Run() {
 		fmt.Printf("%d connections with %d pipelining factor\n\n", rb.concurrent, rb.pipeline)
 	}
 
+	callHTTP(rb)
+
+	fmt.Println("Req/Bytes counts sampled once per second.")
+	fmt.Printf("%s requests in %.2fs, %s read\n", countRequest(totalReq), math.Round(time.Since(start).Seconds()), countReadRequest(size))
+	fmt.Printf("%s 2xx responses and %s non 2xx responses\n", countRequest(respOK), countRequest(reqError))
+	fmt.Printf("%s errors (%s timeouts)\n", countRequest(reqError), countRequest(timeout))
+}
+
+func callHTTP(rb *ReqBench) {
+	latency := histogram.New()
+	reqBytes := histogram.New().SetTimeSleep(rb.duration)
+
 	u, _ := url.Parse(rb.path)
-	start := time.Now()
+	start = time.Now()
 	for i := 0; i < rb.concurrent; i++ {
 		c := fasthttp.PipelineClient{
 			Addr:               fmt.Sprintf("%v:%v", u.Hostname(), u.Port()),
@@ -279,17 +288,26 @@ func (rb *ReqBench) Run() {
 				resp := fasthttp.AcquireResponse()
 				defer fasthttp.ReleaseResponse(resp)
 				for {
-					count++
+					totalReq++
 					if e := c.DoTimeout(req, resp, time.Second*time.Duration(rb.timeout)); e != nil {
+						latency.AddTime(time.Since(start))
 						reqError++
 						if e == fasthttp.ErrTimeout {
 							timeout++
 						}
 					} else {
-						size += len(resp.Body())
+						latency.AddTime(time.Since(start))
+						size += int64(len(resp.Body()))
 						resp.Header.VisitAll(func(key, value []byte) {
-							size += len(key) + len(value)
+							size += int64(len(key) + len(value))
 						})
+						reqBytes.AddSize(time.Since(start), size)
+
+						if resp.StatusCode() >= 200 && resp.StatusCode() < 300 {
+							respOK++
+						} else {
+							reqError++
+						}
 						resp.Reset()
 					}
 				}
@@ -297,13 +315,11 @@ func (rb *ReqBench) Run() {
 		}
 	}
 	time.Sleep(time.Duration(rb.duration) * time.Second)
-
-	fmt.Println("Req/Bytes counts sampled once per second.")
-	fmt.Printf("%s requests in %.2fs, %s read\n", countRequest(count), math.Round(time.Since(start).Seconds()), countReadRequest(size))
-	fmt.Printf("%s errors (%s timeouts)\n", countRequest(reqError), countRequest(timeout))
+	latency.CalcLatency()
+	reqBytes.CalcReqBytes()
 }
 
-func countRequest(c int) string {
+func countRequest(c int64) string {
 	var total string
 	if c < 1000 {
 		total = fmt.Sprintf("%d", c/1000)
@@ -314,7 +330,7 @@ func countRequest(c int) string {
 	return total
 }
 
-func countReadRequest(s int) string {
+func countReadRequest(s int64) string {
 	var size string
 	if s >= 1000000 {
 		size = fmt.Sprintf("%.1f MB", float32(s/1000000))
