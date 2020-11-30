@@ -225,7 +225,7 @@ func (rc *ReqConf) Run(r http.Handler, response ResponseFunc) {
 		body = bytes.NewBuffer(js)
 	}
 
-	if body.Len() > 0 {
+	if body.Len() > 0 && len(rc.sendJSONData) == 0 {
 		writer.Close()
 	}
 
