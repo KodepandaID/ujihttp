@@ -208,9 +208,14 @@ func (ts timeSlice) max() time.Duration {
 }
 
 func (ts timeSlice) percentile(p float64) int64 {
-	tp := ts[int(float64(ts.Len())*p+0.5)-1]
+	tp := int(float64(ts.Len())*p+0.5) - 1
+	if tp < 0 {
+		tmp := ts[0]
+		return tmp.Milliseconds()
+	}
 
-	return tp.Milliseconds()
+	tmp := ts[tp]
+	return tmp.Milliseconds()
 }
 
 func countDuration(c int64) (t string) {
@@ -226,7 +231,7 @@ func countDuration(c int64) (t string) {
 func countRequest(c int64) string {
 	var total string
 	if c < 1000 {
-		total = fmt.Sprintf("%d", c/1000)
+		total = fmt.Sprintf("%d", c)
 	} else if c >= 1000 {
 		total = fmt.Sprintf("%dk", c/1000)
 	}
