@@ -6,14 +6,13 @@ import (
 	"io"
 	"math"
 	"mime/multipart"
-	"net/url"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/KodepandaID/ujihttp"
-	"github.com/KodepandaID/ujihttp/internal/fasthttp"
 	"github.com/KodepandaID/ujihttp/pkg/histogram"
+	"github.com/valyala/fasthttp"
 )
 
 var body = &bytes.Buffer{}
@@ -253,20 +252,20 @@ func callHTTP(rb *ReqBench) {
 	latency := histogram.New()
 	reqBytes := histogram.New().SetTimeSleep(rb.duration)
 
-	u, _ := url.Parse(rb.path)
 	start = time.Now()
 	for i := 0; i < rb.concurrent; i++ {
-		c := fasthttp.PipelineClient{
-			Addr:               fmt.Sprintf("%v:%v", u.Hostname(), u.Port()),
-			MaxPendingRequests: rb.pipeline,
-			IsTLS:              u.Scheme == "https",
+		c := fasthttp.Client{
+			Name:            "UjiHTTP/Benchmark",
+			MaxConnsPerHost: rb.concurrent,
 		}
+
 		for j := 0; j < rb.pipeline; j++ {
 			go func() {
 				req := fasthttp.AcquireRequest()
 				defer fasthttp.ReleaseRequest(req)
-				req.Header.SetMethod(rb.method)
+
 				req.SetRequestURI(rb.path)
+				req.Header.SetMethod(rb.method)
 
 				if len(rb.headers) > 0 {
 					for key, val := range rb.headers {
@@ -283,10 +282,10 @@ func callHTTP(rb *ReqBench) {
 				if rb.contentType != "" {
 					req.Header.Set("Content-Type", rb.contentType)
 				}
-				req.Header.Set("User-Agent", "UjiHTTP/Benchmark")
 
 				resp := fasthttp.AcquireResponse()
 				defer fasthttp.ReleaseResponse(resp)
+
 				for {
 					totalReq++
 					if e := c.DoTimeout(req, resp, time.Second*time.Duration(rb.timeout)); e != nil {
@@ -322,7 +321,7 @@ func callHTTP(rb *ReqBench) {
 func countRequest(c int64) string {
 	var total string
 	if c < 1000 {
-		total = fmt.Sprintf("%d", c/1000)
+		total = fmt.Sprintf("%d", c)
 	} else if c >= 1000 {
 		total = fmt.Sprintf("%dk", c/1000)
 	}
