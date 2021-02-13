@@ -2,6 +2,7 @@ package benchmark
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -251,6 +252,30 @@ func (rb *ReqBench) Run() {
 func callHTTP(rb *ReqBench) {
 	latency := histogram.New()
 	reqBytes := histogram.New().SetTimeSleep(rb.duration)
+
+	if len(rb.send) > 0 {
+		if body.Len() == 0 {
+			writer = multipart.NewWriter(body)
+		}
+
+		for key, val := range rb.send {
+			writer.WriteField(key, val)
+		}
+
+		rb.contentType = writer.FormDataContentType()
+	}
+
+	if len(rb.sendJSONData) > 0 {
+		js, e := json.Marshal(rb.sendJSONData)
+		if e != nil {
+			panic(e)
+		}
+		body = bytes.NewBuffer(js)
+	}
+
+	if body.Len() > 0 && len(rb.sendJSONData) == 0 {
+		writer.Close()
+	}
 
 	start = time.Now()
 	for i := 0; i < rb.concurrent; i++ {
